@@ -1,0 +1,307 @@
+---
+title: "Acidentes com Animais Peçonhentos Notificados em 2021"
+author: "Elisa Fink"
+date: "2022-09-09"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+#IMPORTANDO O BANCO, NÃO EXIBIR
+library(readxl)
+dados <- read_excel("dados_caso.xlsx")
+```
+
+##   Análise demográfica das Vítimas de Acidentes com Animais Peçonhentos:
+\
+
+```{r echo=FALSE, fig.height=3, fig.width=8, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(patchwork)
+
+p1<-ggplot(dados)+
+  geom_bar(mapping = aes(x = Sexo, fill = Sexo), color = "black")+
+  labs(x= "Sexo", y = "Número de casos", title = "Sexo")
+
+
+p2<-ggplot(dados)+
+  geom_histogram(mapping = aes(x = Idade), color = "black", fill = "turquoise", binwidth = 10)+
+  labs(x = "Idade", y = "Número de casos", title = "Idade")
+  
+p1+p2
+```
+\
+\
+```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE}
+dados$Escolaridade<- factor(dados$Escolaridade, 
+                                 levels = c("Analfabeto", "1ª a 4ª série incompleta do EF", "4ª série completa do EF ( antigo 1° grau)",
+                                "5ª à 8ª série incompleta do EF (antigo ginásio ou 1° grau)", "Ensino fundamental completo (antigo ginásio ou 1° grau)", 
+                                "Ensino médio incompleto (antigo colegial ou 2° grau)", "Ensino médio completo (antigo colegial ou 2° grau)", "Educação superior incompleta", "Educação superior completa", "Ignorado", "Não informado", "Não se aplica"))
+
+ggplot(dados)+
+  geom_bar(mapping = aes(x = Escolaridade, fill = Escolaridade), color = "black")+
+  labs(title = "Escolaridade")+
+  theme(axis.title.x=element_blank(),axis.text.x=element_blank())
+```
+
+#### Município de ocorrência:
+\
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+library(sf)
+library(geobr)
+
+mun <- read_municipality(code_muni="RS", year=2020)
+library(dplyr)
+tab<-dados%>%
+  group_by(Município_de_ocorrência)%>%
+  summarise(total = n())
+
+mun_tab<-mun%>%
+  left_join(tab, by = c("name_muni" = "Município_de_ocorrência"))
+mun_tab$total[is.na(mun_tab$total)]<- 0
+
+mun_tab<-mun%>%
+  left_join(tab, by = c("name_muni" = "Município_de_ocorrência"))
+mun_tab$total[is.na(mun_tab$total)]<- 0
+
+
+grafico<-ggplot(mun_tab) +
+  geom_sf(aes(fill=total), color= NA, size=.15)+
+  labs(title="Distribuição dos Acidentes com Animais Peçonhentos no Território")+
+  scale_fill_distiller(palette = "YlOrRd", direction = 1, name="Code_muni")+
+  theme_minimal()
+grafico
+
+```
+```{r echo=FALSE, fig.height=4, message=FALSE, fig.align = 'center',warning=FALSE}
+grafico
+```
+
+
+#### Há correlação com o número de habitantes do município?
+\
+\
+\
+```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE}
+população <- read_excel("08153149-divisao-saude-macrorregiao-crs-e-regioes-de-saude-atualizado-2021.xlsx", range = "D1:E497")
+população<- na.omit(população)
+
+casos_por_município<-dados%>%
+  group_by(Município_de_ocorrência)%>%
+  summarise(Casos = n())
+
+casos_por_município<-casos_por_município%>%
+  inner_join(população, by = c("Município_de_ocorrência" = "MUNICÍPIO"))
+
+ggplot(casos_por_município)+
+  geom_point(mapping = aes(x = TOTAL, y = Casos), size = 1, fill = "yellow")+
+  labs(x = "População", title ="Gráfico de dispersão População vs Casos")
+
+ggplot(casos_por_município)+
+  geom_point(mapping = aes(x = TOTAL, y = Casos), size = 1, fill = "yellow")+
+  ylim(0,200)+
+  xlim(0,200000)+
+  labs(x = "População", title = "Gráfico de Dispersão com Zoom")
+```
+
+
+## Cálculo do Coeficiente de Correlação de Pearson e Intervalo de Confiança
+\
+```{r}
+cor.test(casos_por_município$Casos, casos_por_município$TOTAL, method = "pearson")
+```
+
+O resultado indica correlação fraca, porém com p-valor significativo.
+\newpage
+#### Ocupações principais (15 mais comuns):
+\
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+tabela<-dados%>%
+  group_by(Ocupação)%>%
+  summarise(total = n(), proporção = round(n()/5920, 3))%>%
+  arrange(desc(total))
+
+library(knitr)
+kable(tabela[1:15,])
+
+
+```
+
+
+
+
+\newpage
+# Descritivas sobre Características dos Acidentes
+
+#### Distribuição dos acidentes durante o ano:
+\
+\
+```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(lubridate)
+
+dados$mes_acidente<- as.factor(month(dados$Data_do_acidente))
+dados$dia_acidente<- dados$Data_do_acidente
+year(dados$dia_acidente)<- 1900
+levels(dados$mes_acidente) <- c( "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez")
+
+ggplot(dados)+
+  geom_bar(mapping = aes(x = mes_acidente), color = "black", fill = "yellow")+
+  labs(x= "Mês", y = "Número de Casos")
+```
+
+
+
+#### Zona de ocorrência dos acidentes:
+\
+\
+```{r echo=FALSE, fig.height=4, message=FALSE, warning=FALSE}
+dados$Zona_de_ocorrência<-factor(dados$Zona_de_ocorrência, levels = c( "Rural", "Urbana", "Periurbana", "Não informado", "Ignorado"))
+ggplot(dados)+
+  geom_bar(mapping = aes(x = Zona_de_ocorrência), color = "black", fill = "yellow")+
+  labs(title = "Zona de Ocorrência")
+```
+
+
+#### Tipos de acidente (animais):
+\
+\
+```{r echo=FALSE, message=FALSE,  fig.align = 'center', warning=FALSE}
+
+library(ggplot2)
+dados$Tipo_de_acidente <- factor(dados$Tipo_de_acidente, 
+                                 levels = c("Abelha", "Aranha", "Escorpião", "Lagarta", "Serpente", "Outros", "Ignorado"))
+                                   
+ggplot(dados)+
+  geom_bar(mapping = aes(x = Tipo_de_acidente), color = "black", fill = "yellow")+
+  labs(x = "Animal", y = "Número de casos", title = "Gráfico de Barras")
+
+animal<-dados%>%
+  group_by(Tipo_de_acidente)%>%
+  summarise(total = n())%>%
+  arrange(desc(total))
+
+
+
+
+```
+
+\
+\
+\
+
+```{r echo=FALSE, message=FALSE,fig.align = 'center',warning=FALSE}
+pie(animal$total, labels = animal$Tipo_de_acidente, 
+        col = rainbow(length(animal$total), start = 0.15),main = "Gráfico de
+    Pizza")
+
+
+```
+
+
+
+
+#### Gravidade:
+\
+\
+```{r echo=FALSE, fig.height=3.5, message=FALSE, warning=FALSE}
+dados$Classificação_do_caso <- factor(dados$Classificação_do_caso, 
+                                 levels = c("Leve", "Moderado", "Grave", "Não Informado", "Ignorado"))
+
+ggplot(dados)+
+  geom_bar(mapping = aes(x = Classificação_do_caso), color = "black", fill = "yellow")+
+  labs(x = "Classificação do Caso", y = "Número de Casos", title = "Gravidade do Acidente")
+```
+
+
+
+
+#### Gravidade dado o tipo de animal:
+\
+\
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dados$Classificação_do_caso <- factor(dados$Classificação_do_caso, 
+                                 levels = c("Leve", "Moderado", "Grave", "Não Informado", "Ignorado"))
+dados$Tipo_de_acidente <- factor(dados$Tipo_de_acidente, 
+                                 levels = c("Abelha", "Aranha", "Escorpião", "Lagarta", "Serpente", "Outros", "Ignorado"))
+levels(dados$Classificação_do_caso) <- c("Leve", "Mod.", "Grave", "N.I.", "Ign.")
+ggplot(dados)+
+  geom_bar(mapping = aes(x = Classificação_do_caso), color = "black", fill = "yellow")+
+  facet_wrap(.~ Tipo_de_acidente,   scales = "free_y")+
+  labs(x = "Gravidade", y = "Número de acidentes", title = "Gravidade dos Acidentes dado o tipo de Animal")
+
+```
+
+
+
+#### Evolução do Caso:
+\
+\
+```{r echo=FALSE, message=FALSE, fig.height= 4, warning=FALSE}
+dados$Evolução_do_caso<-as.factor(dados$Evolução_do_caso)
+levels(dados$Evolução_do_caso) <- c("Cura", "Ignorado","Não Informado", "Óbito")
+ggplot(dados)+
+  geom_bar(mapping = aes(x = Evolução_do_caso), color = "black", fill = "yellow")+
+  labs(x ="Evolução do Caso", y = "Número de casos")+
+  geom_text(stat = "count", aes(x = Evolução_do_caso,label = after_stat(count)), vjust = -1)+
+  ylim(0,5500)
+
+```
+
+Neste gráfico, incluí rótulos para as barras para facilitar a visualização do número exato de óbitos.
+
+
+
+#### Parte do corpo onde ocorreu a picada:
+\
+\
+```{r echo=FALSE, message=FALSE, fig.align = 'center', warning=FALSE}
+local<-dados%>%
+  group_by(Local_da_picada)%>%
+  summarise(total = n())%>%
+  arrange(desc(total))
+
+pie(local$total, labels = local$Local_da_picada, 
+    col = rainbow(length(local$total), start = 0.15), main = "Local da Picada")
+```
+
+
+
+\newpage
+#### Tempo de Incubação (tempo entre data do acidente e início dos sintomas):
+\
+\
+```{r echo=FALSE, message=FALSE, fig.height= 4, warning=FALSE}
+dados$tempo_de_incubação<-as.numeric(as.Date(dados$Data_de_início_dos_sintomas) - as.Date(dados$Data_do_acidente))
+dados$tempo_de_incubação[dados$tempo_de_incubação>30]<-30
+
+
+
+ggplot(dados)+
+  geom_histogram(mapping = aes(x = tempo_de_incubação), color = "black", fill = "yellow")+
+  xlim(-1,30) +
+  labs(x = "Tempo de incubação", y = "Número de casos")
+```
+
+
+
+
+
+#### Possíveis continuações da análise:
+
+
+
+### Modelo Linear para dados categoricos
+
+### Análise de Componentes Principais
+
+### Análise de Clusters
+\
+
+## O código completo está disponível no meu GitHub.
+
+
